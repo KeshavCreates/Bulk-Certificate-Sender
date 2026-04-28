@@ -1,4 +1,4 @@
-# Bulk Certificate Sender
+# CertifyPro
 
 A browser-based certificate generation and bulk email delivery tool built with Node.js, Express, Fabric.js, PapaParse, jsPDF, JSZip, and Nodemailer. The application lets you choose or upload a certificate template, customize it in a visual editor, upload recipient data from CSV, and then generate and send personalized certificates in bulk.
 
@@ -129,7 +129,7 @@ Receives generated PDFs, recipient data, and SMTP configuration, then sends cert
 ## Installation
 
 ```bash
-git clone https://github.com/KeshavCreates/Bulk-Certificate-Sender.git
+git clone https://github.com/KeshavCreates/CertifyPro.git
 cd Bulk-Certificate-Sender
 npm install
 ```

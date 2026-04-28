@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CertifyPro — Certificate Generator & Emailer</title>
+  <meta name="description" content="Create beautiful certificates, bulk generate from CSV, and send via email." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@400;600;700&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+
+  <!-- Fabric.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+  <script>
+    // Fix Fabric.js v5 bug: 'alphabetical' is not a valid CanvasTextBaseline (should be 'alphabetic')
+    (function () {
+      const _origSet = Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, 'textBaseline');
+      if (_origSet && _origSet.set) {
+        Object.defineProperty(CanvasRenderingContext2D.prototype, 'textBaseline', {
+          set: function (val) { _origSet.set.call(this, val === 'alphabetical' ? 'alphabetic' : val); },
+          get: _origSet.get,
+          configurable: true,
+        });
+      }
+    })();
+  </script>
+  <!-- PapaParse -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <!-- jsPDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <!-- JSZip -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+</head>
+
+<body>
+  <!-- ━━━ Header ━━━ -->
+  <header class="app-header">
+    <div class="logo">
+      <span class="logo-icon">🎓</span>
+      <h1>CertifyPro</h1>
+    </div>
+    <p class="tagline">Create · Customize · Send</p>
+  </header>
+
+  <!-- Floating Save/Load Draft button -->
+  <div class="floating-draft-actions" id="floating-draft-actions" style="display:none;">
+    <button class="btn btn-sm floating-draft-btn" id="btn-save-draft-float" title="Save current work as a draft">
+      💾 Save Draft
+    </button>
+  </div>
+
+  <!-- ━━━ Step Indicator ━━━ -->
+  <nav class="steps-bar">
+    <div class="step active" data-step="1">
+      <span class="step-num">1</span>
+      <span class="step-label">Template</span>
+    </div>
+    <div class="step-line"></div>
+    <div class="step" data-step="2">
+      <span class="step-num">2</span>
+      <span class="step-label">Customize</span>
+    </div>
+    <div class="step-line"></div>
+    <div class="step" data-step="3">
+      <span class="step-num">3</span>
+      <span class="step-label">Upload CSV</span>
+    </div>
+    <div class="step-line"></div>
+    <div class="step" data-step="4">
+      <span class="step-num">4</span>
+      <span class="step-label">Setup Email</span>
+    </div>
+    <div class="step-line"></div>
+    <div class="step" data-step="5">
+      <span class="step-num">5</span>
+      <span class="step-label">Generate & Send</span>
+    </div>
+  </nav>
+
+  <!-- ━━━ Main Content ━━━ -->
+  <main class="main-content">
+
+    <!-- ── Step 1: Template Selection ── -->
+    <section class="step-panel active" id="step-1">
+      <h2 class="section-title">Choose a Template</h2>
+      <p class="section-desc">Select a certificate design to get started, or upload your own image.</p>
+      <div class="template-grid" id="template-grid">
+        <!-- Populated by templates.js -->
+      </div>
+
+      <!-- Custom template upload -->
+      <div class="custom-upload-section">
+        <div class="custom-upload-divider">
+          <span>OR</span>
+        </div>
+        <div class="custom-upload-box">
+          <label class="btn btn-secondary btn-large" for="custom-bg-upload">
+            🖼️ Upload Your Own Template Image
+          </label>
+          <input type="file" id="custom-bg-upload" accept="image/*" hidden />
+          <p class="custom-upload-hint">Upload a certificate background image (PNG, JPG). A {NAME} placeholder will be
+            added automatically.</p>
+        </div>
+      </div>
+
+      <div class="step-actions">
+        <button class="btn btn-primary" id="btn-next-1" disabled>
+          Next: Customize
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M5 12h14M12 5l7 7-7 7" />
+          </svg>
+        </button>
+      </div>
+    </section>
+
+    <!-- ── Step 2: Customize ── -->
+    <section class="step-panel" id="step-2">
+      <h2 class="section-title">Customize Your Certificate</h2>
+      <p class="section-desc">Edit text, upload your logo, and position elements on the canvas.</p>
+
+      <div class="editor-layout">
+        <!-- Toolbar -->
+        <div class="editor-toolbar">
+          <div class="tool-group">
+            <label>Upload Logo</label>
+            <label class="file-upload-btn" for="logo-upload">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+              Choose File
+            </label>
+            <input type="file" id="logo-upload" accept="image/*" hidden />
+          </div>
+
+          <div class="tool-group">
+            <label>Font Family</label>
+            <select id="font-family">
+              <option value="Playfair Display">Playfair Display</option>
+              <option value="Inter">Inter</option>
+              <option value="Georgia">Georgia</option>
+              <option value="Times New Roman">Times New Roman</option>
+              <option value="Arial">Arial</option>
+              <option value="Courier New">Courier New</option>
+            </select>
+          </div>
+
+          <div class="tool-group">
+            <label>Font Size</label>
+            <input type="number" id="font-size" value="32" min="8" max="120" />
+          </div>
+
+          <div class="tool-group">
+            <label>Text Color</label>
+            <input type="color" id="font-color" value="#1a1a2e" />
+          </div>
+
+          <div class="tool-group">
+            <label>Bold</label>
+            <button class="btn btn-sm" id="btn-bold">B</button>
+          </div>
+
+          <div class="tool-group">
+            <label>Add Text</label>
+            <button class="btn btn-sm" id="btn-add-text">+ Text</button>
+          </div>
+
+          <div class="tool-group">
+            <label>Delete Selected</label>
+            <button class="btn btn-sm btn-danger" id="btn-delete">🗑</button>
+          </div>
+
+          <div class="toolbar-separator"></div>
+
+          <div class="tool-group">
+            <label>Undo</label>
+            <button class="btn btn-sm" id="btn-undo" disabled>↩</button>
+          </div>
+
+          <div class="tool-group">
+            <label>Redo</label>
+            <button class="btn btn-sm" id="btn-redo" disabled>↪</button>
+          </div>
+        </div>
+
+        <!-- Canvas -->
+        <div class="canvas-wrapper">
+          <canvas id="cert-canvas"></canvas>
+        </div>
+
+        <p class="editor-hint">
+          💡 Double-click any text to edit. Drag elements to reposition. The <strong>{NAME}</strong> placeholder will be
+          replaced for each person in your CSV.
+        </p>
+      </div>
+
+      <div class="step-actions">
+        <button class="btn btn-secondary" id="btn-back-2">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 12H5M12 19l-7-7 7-7" />
+          </svg>
+          Back
+        </button>
+        <div class="step-actions-right">
+          <button class="btn btn-sm btn-secondary" id="btn-save-draft" title="Save your design for later">💾 Save
+            Draft</button>
+          <button class="btn btn-primary" id="btn-next-2">
+            Next: Upload CSV
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M5 12h14M12 5l7 7-7 7" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Step 3: CSV Upload ── -->
+    <section class="step-panel" id="step-3">
+      <h2 class="section-title">Upload Your Name Sheet</h2>
+      <p class="section-desc">Upload a CSV file with <strong>Name</strong> and <strong>Email</strong> columns.</p>
+
+      <div class="csv-upload-area" id="csv-drop-zone">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+          <polyline points="14 2 14 8 20 8" />
+          <line x1="16" y1="13" x2="8" y2="13" />
+          <line x1="16" y1="17" x2="8" y2="17" />
+          <polyline points="10 9 9 9 8 9" />
+        </svg>
+        <p>Drag & drop your CSV here, or</p>
+        <label class="file-upload-btn" for="csv-upload">Browse Files</label>
+        <input type="file" id="csv-upload" accept=".csv" hidden />
+        <span class="csv-hint">Expected format: Name, Email</span>
+      </div>
+
+      <div class="csv-preview-wrapper" id="csv-preview-wrapper" style="display:none;">
+        <h3>Preview <span id="csv-count"></span></h3>
+        <div class="table-scroll">
+          <table id="csv-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Name</th>
+                <th>Email</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="step-actions">
+        <button class="btn btn-secondary" id="btn-back-3">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 12H5M12 19l-7-7 7-7" />
+          </svg>
+          Back
+        </button>
+        <button class="btn btn-primary" id="btn-next-3" disabled>
+          Next: Setup Email
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M5 12h14M12 5l7 7-7 7" />
+          </svg>
+        </button>
+      </div>
+    </section>
+
+    <!-- ── Step 4: App Password Instructions ── -->
+    <section class="step-panel" id="step-4">
+      <h2 class="section-title">📧 Setup Your Email for Sending</h2>
+      <p class="section-desc">Before sending certificates, you need to generate an <strong>App Password</strong> from
+        your email provider. Follow the steps below.</p>
+
+      <div class="instructions-container">
+        <div class="instruction-card glass-card">
+          <div class="instruction-step-num">1</div>
+          <div class="instruction-content">
+            <h3>Open App Passwords Page</h3>
+            <p>Click the button below to open Google's App Passwords page. You must be signed in to your Google account.
+            </p>
+            <a href="https://myaccount.google.com/apppasswords" target="_blank"
+              class="btn btn-primary btn-instruction-link">
+              🔗 Open Google App Passwords
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                <polyline points="15 3 21 3 21 9" />
+                <line x1="10" y1="14" x2="21" y2="3" />
+              </svg>
+            </a>
+            <p class="instruction-note">⚠️ You need <strong>2-Step Verification</strong> enabled on your Google account
+              to see this page.</p>
+          </div>
+        </div>
+
+        <div class="instruction-card glass-card">
+          <div class="instruction-step-num">2</div>
+          <div class="instruction-content">
+            <h3>Create a New App Password</h3>
+            <p>On the App Passwords page:</p>
+            <ol>
+              <li>Type a name like <strong>"CertifyPro"</strong> in the app name field</li>
+              <li>Click <strong>"Create"</strong></li>
+              <li>Google will generate a <strong>16-character password</strong> (e.g., <code>abcd efgh ijkl mnop</code>)
+              </li>
+            </ol>
+          </div>
+        </div>
+
+        <div class="instruction-card glass-card">
+          <div class="instruction-step-num">3</div>
+          <div class="instruction-content">
+            <h3>Copy & Save the Password</h3>
+            <p><strong>Important:</strong> Copy the generated password immediately and save it somewhere safe (e.g., a
+              Notepad file). Google will <strong>not show it again</strong> after you close the dialog.</p>
+            <div class="instruction-warning">
+              ⚡ <strong>Tip:</strong> You'll paste this password in the next step as your "App Password". Do NOT use
+              your regular Gmail password.
+            </div>
+          </div>
+        </div>
+
+        <div class="instruction-card glass-card">
+          <div class="instruction-step-num">4</div>
+          <div class="instruction-content">
+            <h3>Use It in the Next Step</h3>
+            <p>In the next step, enter:</p>
+            <ul>
+              <li><strong>Email Address:</strong> Your full Gmail address (e.g., <code>you@gmail.com</code>)</li>
+              <li><strong>App Password:</strong> The 16-character password you just generated</li>
+            </ul>
+            <p>That's it! You're ready to send certificates.</p>
+          </div>
+        </div>
+
+        <div class="instruction-card glass-card instruction-other">
+          <div class="instruction-content">
+            <h3>📌 Using Outlook or another provider?</h3>
+            <p>For <strong>Outlook</strong>, use your regular email and password with SMTP host
+              <code>smtp-mail.outlook.com</code> (port 587). For other providers, check their SMTP documentation.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="step-actions">
+        <button class="btn btn-secondary" id="btn-back-4">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 12H5M12 19l-7-7 7-7" />
+          </svg>
+          Back
+        </button>
+        <button class="btn btn-primary" id="btn-next-4">
+          Next: Generate & Send
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M5 12h14M12 5l7 7-7 7" />
+          </svg>
+        </button>
+      </div>
+    </section>
+
+    <!-- ── Step 5: Generate & Send ── -->
+    <section class="step-panel" id="step-5">
+      <h2 class="section-title">Generate & Send Certificates</h2>
+      <p class="section-desc">Configure email settings and send certificates to all recipients.</p>
+
+      <!-- SMTP Config -->
+      <div class="smtp-config glass-card">
+        <h3>📧 Email Settings (SMTP)</h3>
+        <p class="smtp-note">Enter your email and the App Password you generated in the previous step.</p>
+
+        <div class="smtp-presets">
+          <button class="btn btn-sm smtp-preset active" data-host="smtp.gmail.com" data-port="465"
+            data-secure="true">Gmail</button>
+          <button class="btn btn-sm smtp-preset" data-host="smtp-mail.outlook.com" data-port="587"
+            data-secure="false">Outlook</button>
+          <button class="btn btn-sm smtp-preset" data-host="" data-port="587" data-secure="false">Custom</button>
+        </div>
+
+        <div class="smtp-fields">
+          <div class="field-row">
+            <div class="field">
+              <label for="smtp-host">SMTP Host</label>
+              <input type="text" id="smtp-host" value="smtp.gmail.com" placeholder="smtp.gmail.com" />
+            </div>
+            <div class="field field-sm">
+              <label for="smtp-port">Port</label>
+              <input type="number" id="smtp-port" value="465" />
+            </div>
+            <div class="field field-sm">
+              <label for="smtp-secure">Secure (SSL)</label>
+              <select id="smtp-secure">
+                <option value="true">Yes</option>
+                <option value="false">No</option>
+              </select>
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="smtp-user">Email Address</label>
+              <input type="email" id="smtp-user" placeholder="you@gmail.com" />
+            </div>
+            <div class="field">
+              <label for="smtp-pass">App Password</label>
+              <input type="password" id="smtp-pass" placeholder="xxxx xxxx xxxx xxxx" />
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="email-subject">Email Subject</label>
+              <input type="text" id="email-subject" value="Your Certificate" />
+            </div>
+            <div class="field">
+              <label for="from-name">Sender Name</label>
+              <input type="text" id="from-name" placeholder="Your Organization" />
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field" style="flex:1;min-width:100%">
+              <label>Email Body</label>
+              <div class="email-body-toggle">
+                <button class="btn btn-sm email-body-opt active" data-mode="default" type="button">📨 Default
+                  Template</button>
+                <button class="btn btn-sm email-body-opt" data-mode="custom" type="button">✏️ Custom Message</button>
+              </div>
+              <div class="email-body-default-preview" id="email-body-default-preview">
+                <p class="default-preview-text">
+                  <strong>Congratulations, {NAME}! 🎉</strong><br>
+                  Please find your certificate attached.<br><br>
+                  <span style="opacity:0.5">Sent via CertifyPro.</span>
+                </p>
+              </div>
+              <div class="email-body-custom" id="email-body-custom" style="display:none;">
+                <textarea id="email-body" rows="5"
+                  placeholder="Hi {NAME},&#10;&#10;Please find your certificate attached.&#10;&#10;Best regards,&#10;Your Organization"></textarea>
+                <p class="label-hint" style="margin-top:4px;">Use <code>{NAME}</code> to insert each recipient's name.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <button class="btn btn-secondary" id="btn-test-smtp">
+          🔌 Test Connection
+        </button>
+        <span class="smtp-status" id="smtp-status"></span>
+      </div>
+
+      <!-- Actions -->
+      <div class="generate-actions">
+        <button class="btn btn-large btn-secondary" id="btn-preview-cert">
+          👁️ Preview First Certificate
+        </button>
+        <button class="btn btn-large btn-primary" id="btn-generate-send">
+          🚀 Generate & Send All
+        </button>
+        <button class="btn btn-large btn-secondary" id="btn-download-all">
+          📦 Download All as ZIP
+        </button>
+      </div>
+
+      <!-- Progress -->
+      <div class="progress-panel" id="progress-panel" style="display:none;">
+        <h3>Progress</h3>
+        <div class="progress-bar-track">
+          <div class="progress-bar-fill" id="progress-bar"></div>
+        </div>
+        <p class="progress-text" id="progress-text">0 / 0</p>
+        <div class="progress-log" id="progress-log"></div>
+      </div>
+
+      <div class="step-actions">
+        <button class="btn btn-secondary" id="btn-back-5">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 12H5M12 19l-7-7 7-7" />
+          </svg>
+          Back
+        </button>
+      </div>
+    </section>
+  </main>
+
+  <!-- ━━━ Footer ━━━ -->
+  <footer class="app-footer">
+    <p>CertifyPro — Built with ❤️ &nbsp;|&nbsp; Your data stays in your browser</p>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="js/templates.js"></script>
+  <script src="js/editor.js"></script>
+  <script src="js/csv-handler.js"></script>
+  <script src="js/generator.js"></script>
+  <script src="js/app.js"></script>
+</body>
+
+</html>
